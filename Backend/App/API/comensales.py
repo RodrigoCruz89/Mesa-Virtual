@@ -1,0 +1,56 @@
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from App.DataBase.connection import get_db
+from App.Models.comensal import Comensal, EstadoSesion
+from App.Schemas.comensal import ComensalCreate, ComensalResponse
+
+router = APIRouter(prefix="/api/comensales", tags=["Comensales"])
+
+
+@router.post("/", response_model=ComensalResponse)
+def crear_comensal(datos: ComensalCreate, db: Session = Depends(get_db)):
+    from App.Models.mesa import Mesa, EstadoMesa
+    mesa = db.query(Mesa).filter(Mesa.id_mesa == datos.id_mesa).first()
+    if not mesa:
+        raise HTTPException(status_code=404, detail="Mesa no encontrada")
+    
+    # Cambiar el estado de la mesa a 'ocupada' al ingresar el comensal (HU-01)
+    mesa.estado = EstadoMesa.ocupada
+    
+    nuevo = Comensal(**datos.model_dump(), id_restaurante=mesa.id_restaurante)
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+    return nuevo
+
+
+@router.get("/", response_model=List[ComensalResponse])
+def listar_comensales(id_restaurante: int = None, db: Session = Depends(get_db)):
+    query = db.query(Comensal)
+    if id_restaurante is not None:
+        query = query.filter(Comensal.id_restaurante == id_restaurante)
+    return query.all()
+
+
+@router.get("/{id_comensal}", response_model=ComensalResponse)
+def obtener_comensal(id_comensal: int, db: Session = Depends(get_db)):
+    item = db.query(Comensal).filter(Comensal.id_comensal == id_comensal).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Comensal no encontrado")
+    return item
+
+
+@router.put("/{id_comensal}/cerrar-sesion", response_model=ComensalResponse)
+def cerrar_sesion_comensal(id_comensal: int, db: Session = Depends(get_db)):
+    """
+    No borramos al comensal (rompería el historial de sus pedidos/pagos),
+    solo marcamos su sesión como inactiva.
+    """
+    item = db.query(Comensal).filter(Comensal.id_comensal == id_comensal).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Comensal no encontrado")
+    item.estado_sesion = EstadoSesion.inactiva
+    db.commit()
+    db.refresh(item)
+    return item
