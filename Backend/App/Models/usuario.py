@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Enum
+from sqlalchemy.orm import relationship
 from App.DataBase.connection import Base
 import enum
 
@@ -21,3 +22,4 @@ class Usuario(Base):
     contrasena = Column(String(255), nullable=False)
     rol = Column(Enum(RolUsuario), nullable=False)
     estado = Column(Enum(EstadoUsuario), default=EstadoUsuario.activo)
+    pedidos = relationship("Pedido", back_populates="usuario")
